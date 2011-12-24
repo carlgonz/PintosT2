@@ -9,7 +9,6 @@ static int write(int fd, const void  *buffer, unsigned size);
 static tid_t exec(const char  *cmd_line);
 static int wait(tid_t pid);
 
-
 void
 syscall_init (void) 
 {
@@ -23,17 +22,15 @@ syscall_handler (struct intr_frame *f)
 	int call;
 	int status;
 	
-	unsigned int f_des;
-	char *buffer;
-	unsigned int size;
-	int i;
+	int *args = f->esp; 
+	args++;
 	
-	if(is_valid_arg(f->esp))
+	//if(is_valid_arg(f->esp))
 		call = *(int*)(f->esp);
-	else
-		call = -1; /* Se ira al default del switch */
+	//else
+	//	call = -1; /* Se ira al default del switch */
 		
-	/**/printf ("SYSCALL\n");
+	/**/printf ("\nSYSCALL\n");
 	switch(call)
 	{
 		case SYS_HALT:
@@ -42,6 +39,7 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_EXIT:
+		/**/printf ("SYS_EXIT\n");
 			/* Revisar puntero */
 			if(is_valid_arg(f->esp+4))
 				status = *(int *)(f->esp + 4); /* Valido */
@@ -52,6 +50,7 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_EXEC:
+		/**/printf ("SYS_EXEC\n");
 			/* Revisar puntero */
 			if(is_valid_arg(f->esp+4))
 			{
@@ -68,6 +67,7 @@ syscall_handler (struct intr_frame *f)
 			break;
 		
 		case SYS_WAIT:
+		/**/printf ("SYS_WAIT\n");
 			if(is_valid_arg(f->esp+4))
 			{
 				status = wait(*(tid_t *)(f->esp + 4)); /* Valido */
@@ -94,11 +94,10 @@ syscall_handler (struct intr_frame *f)
 			//}
 			
 			/* Estando comprobados dereferencio los punteros */
-			f_des = *(int *)f->esp+4;
-			buffer = (void *)f->esp+8;
-			size = *(int *)f->esp+12;
-			
-			f->eax = write(f_des, buffer,size); /* Retorna la cantidad de bytes escritos */
+			//for(i=0;i<16;i++)
+				//printf("arg(%d) = %u\n",i,*(arg+i));
+			f->eax = write (args[0], (char *)args[1], args[2]);			
+			//f->eax = write(f_des, buffer,size); /* Retorna la cantidad de bytes escritos */
 			break;
 		
 		default:
@@ -107,7 +106,6 @@ syscall_handler (struct intr_frame *f)
 
 	}
 }
-
 
 /*SYS_HALT:*/
 static void 
@@ -127,6 +125,7 @@ exit(int status)
 	// Se imprime mensaje de salida
 	printf("%s: exit(%d)\n",t->name, status);
 	thread_exit ();
+	NOT_REACHED ();
 }
 
 /* SYS_WRITE */
@@ -135,7 +134,7 @@ write(int fd, const void  *buffer, unsigned size)
 {
 	if(fd == STDOUT_FILENO) /* Solo se implemente STDOUT_FILENO */
 			{	
-			
+				/**/printf("WRITING IN STDOUT\n");
 			/* Se escribe en la consola sicronnizando con un mutex */	
 			lock_acquire(&syscall_lock);
 				putbuf(buffer,size);
@@ -178,11 +177,12 @@ wait(tid_t pid)
 static bool 
 is_valid_arg(void *arg)
 {
+	lock_acquire(&syscall_lock);	
 	bool value = true;
 	if(	arg == NULL																								/* Nulo */
 		||!is_user_vaddr(arg)																				/* Kernel */
 	 	||pagedir_get_page(thread_current()->pagedir, arg) == NULL) /* No mapped */
 		value = false;
-	 
-	 return value;
+	lock_release(&syscall_lock);
+	return value;
 }
